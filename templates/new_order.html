@@ -1,0 +1,358 @@
+{% extends 'base.html' %}
+{% block title %}Nuevo pedido - Portal Asesora{% endblock %}
+{% block content %}
+  <h1>Nuevo pedido</h1>
+
+  <form method="post" class="card" id="orderForm">
+    <!-- FILA: Campaña + Nombre asesora -->
+    <div class="row">
+      <div>
+        <label for="campaign">Campaña</label>
+        <select name="campaign" id="campaign" required>
+          <option value="202601">202601</option>
+          <option value="202602">202602</option>
+          <option value="202603">202603</option>
+          <option value="202604">202604</option>
+          <option value="202605">202605</option>
+          <option value="202606">202606</option>
+          <option value="202607">202607</option>
+          <option value="202608">202608</option>
+          <option value="202609">202609</option>
+          <option value="2026010">202610</option>
+        </select>
+      </div>
+      <div class="grow">
+        <label for="advisor_name">Nombre asesora</label>
+        <select name="advisor_name" id="advisor_name" required>
+          <option value="" disabled selected>Cargando…</option>
+        </select>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <h2>Ítems</h2>
+
+    <!-- FILA: Código, Descripción, Talla, Cantidad, Agregar -->
+    <div class="row">
+      <div class="grow">
+        <label for="codigo">Código</label>
+        <input id="codigo" list="matList" placeholder="Código o descripción">
+        <datalist id="matList"></datalist>
+        <!-- CAMBIO: Agregamos div para mostrar errores de validación -->
+        <div id="codeErrorMsg" class="error-message" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></div>
+      </div>
+      <div class="grow">
+        <label for="descripcion">Descripción</label>
+        <input id="descripcion" placeholder="Se autocompleta" readonly>
+      </div>
+      <div>
+        <label for="Talla">Talla</label>
+        <input id="Talla" placeholder="Se autocompleta o ingrésala">
+      </div>
+      <div>
+        <label for="cantidad">Cantidad</label>
+        <input id="cantidad" type="number" min="1" value="1">
+      </div>
+      <div style="align-self:end">
+        <!-- CAMBIO: Agregamos atributo disabled mientras se valida -->
+        <button type="button" id="btnAdd" class="btn">Agregar</button>
+      </div>
+    </div>
+
+    <!-- TABLA -->
+    <div class="table-wrap mt">
+      <table class="table" id="itemsTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Código</th>
+            <th>Descripción</th>
+            <th>Talla</th>
+            <th>Cant.</th>
+            <th>Precio catálogo</th>
+            <th>Precio factura</th>
+            <th>Subt. catálogo</th>
+            <th>Subt. factura</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="5" style="text-align:right"><b>Totales:</b></td>
+            <td id="t_pcat">–</td>
+            <td id="t_pfac">–</td>
+            <td id="t_scat">–</td>
+            <td id="t_sfac">–</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <input type="hidden" name="items_json" id="items_json">
+
+    <div class="actions">
+      <button type="submit" class="btn primary">Guardar pedido</button>
+      <a href="{{ url_for('dashboard') }}" class="btn">Cancelar</a>
+    </div>
+  </form>
+
+  <script>
+    /* ====== CARGA DINÁMICA: Nombre asesora (solo columnas F+G) ====== */
+    async function loadAdvisors() {
+      const sel = document.getElementById('advisor_name');
+      try {
+        const res = await fetch('/api/advisors');
+        const js  = await res.json();
+        const list = Array.isArray(js) ? js : (js.data || js || []);
+        sel.innerHTML = '';
+        const ph = document.createElement('option');
+        ph.value = ''; ph.disabled = true; ph.selected = true; ph.textContent = 'Seleccione…';
+        sel.appendChild(ph);
+        list.forEach(it => {
+          const opt = document.createElement('option');
+          opt.value = it.value || it.label || '';
+          opt.textContent = it.label || it.value || '';
+          if (opt.value) sel.appendChild(opt);
+        });
+        if (sel.options.length === 1) {
+          sel.innerHTML = '<option value="" disabled selected>No hay registros</option>';
+        }
+      } catch (e) {
+        console.error('loadAdvisors error', e);
+        document.getElementById('advisor_name').innerHTML =
+          '<option value="" disabled selected>Error al cargar</option>';
+      }
+    }
+    document.addEventListener('DOMContentLoaded', loadAdvisors);
+
+    /* ====== LÓGICA EXISTENTE ÍTEMS (CON VALIDACIÓN MEJORADA) ====== */
+    const codeInput   = document.getElementById('codigo');
+    const descInput   = document.getElementById('descripcion');
+    const matrizInput = document.getElementById('Talla');
+    const cantInput   = document.getElementById('cantidad');
+    const matList     = document.getElementById('matList');
+    const itemsTBody  = document.querySelector('#itemsTable tbody');
+    const itemsHidden = document.getElementById('items_json');
+    const btnAdd      = document.getElementById('btnAdd');
+    const codeErrorMsg = document.getElementById('codeErrorMsg');
+
+    let items = [];
+    let lastProduct = null;
+    let isValidatingCode = false; // CAMBIO: Flag para rastrear validación en progreso
+
+    function normProduct(p = {}) {
+      return {
+        code: String(p.code || '').trim(),
+        descripcion: String(p.descripcion || '').trim(),
+        Talla: String(p.Talla || '').trim(),
+        precio_catalogo: (p.precio_catalogo ?? null),
+        precio_factura:  (p.precio_factura  ?? null),
+      };
+    }
+
+    async function searchProducts(q) {
+      if (!q || q.length < 2) { matList.innerHTML = ''; return; }
+      try {
+        const res = await fetch(`/api/materials?q=${encodeURIComponent(q)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.data || []); 
+        matList.innerHTML = '';
+        (list || []).forEach(it => {
+          const opt = document.createElement('option');
+          opt.value = it.code;
+          opt.label = it.label;
+          matList.appendChild(opt);
+        });
+      } catch (e) { console.error('searchProducts error', e); }
+    }
+
+    async function loadProductByCode(code) {
+      descInput.value = '';
+      if (!code) return;
+      try {
+        const res = await fetch(`/api/product/${encodeURIComponent(code)}`);
+        if (!res.ok) return;
+        const raw = await res.json();
+        const payload = raw?.data ?? raw;
+        if (payload && !payload.error) {
+          lastProduct = normProduct(payload);
+          descInput.value = lastProduct.descripcion || '';
+          if (lastProduct.Talla && !matrizInput.value) matrizInput.value = lastProduct.Talla;
+        }
+      } catch (e) { console.error('loadProductByCode error', e); }
+    }
+
+    /* 
+      CAMBIO: Nueva función para validar el código.
+      Esta función hace una llamada al servidor para verificar si el código existe.
+    */
+    async function validateCode(code) {
+      if (!code) {
+        showCodeError('El código no puede estar vacío');
+        return false;
+      }
+
+      isValidatingCode = true;
+      btnAdd.disabled = true;
+      clearCodeError();
+
+      try {
+        const res = await fetch('/api/validate-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+
+        const result = await res.json();
+
+        if (!result.valid) {
+          showCodeError(result.error || 'Código no válido');
+          isValidatingCode = false;
+          btnAdd.disabled = false;
+          return false;
+        }
+
+        clearCodeError();
+        isValidatingCode = false;
+        btnAdd.disabled = false;
+        return true;
+
+      } catch (e) {
+        console.error('validateCode error', e);
+        showCodeError('Error al validar el código');
+        isValidatingCode = false;
+        btnAdd.disabled = false;
+        return false;
+      }
+    }
+
+    /* 
+      CAMBIO: Funciones auxiliares para mostrar/limpiar mensajes de error.
+    */
+    function showCodeError(message) {
+      codeErrorMsg.textContent = message;
+      codeErrorMsg.style.display = 'block';
+      codeInput.style.borderColor = '#ef4444'; // rojo
+    }
+
+    function clearCodeError() {
+      codeErrorMsg.textContent = '';
+      codeErrorMsg.style.display = 'none';
+      codeInput.style.borderColor = ''; // restaurar
+    }
+
+    codeInput.addEventListener('input', (e) => {
+      clearCodeError();
+      searchProducts(e.target.value);
+    });
+    
+    codeInput.addEventListener('change', (e) => loadProductByCode(e.target.value));
+
+    function money(v) {
+      if (v === null || v === undefined || isNaN(v)) return '–';
+      return new Intl.NumberFormat('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(v);
+    }
+
+    function renderTable() {
+      itemsTBody.innerHTML = '';
+      let totPCat = 0, totPFac = 0, totSCat = 0, totSFac = 0;
+
+      items.forEach((it, i) => {
+        const tr = document.createElement('tr');
+        const pc = (it.precio_catalogo ?? null);
+        const pf = (it.precio_factura  ?? null);
+        const sc = (pc != null ? pc * it.cantidad : null);
+        const sf = (pf != null ? pf * it.cantidad : null);
+
+        if (pc != null) totPCat += pc;
+        if (pf != null) totPFac += pf;
+        if (sc != null) totSCat += sc;
+        if (sf != null) totSFac += sf;
+
+        tr.innerHTML = `
+          <td>${i+1}</td>
+          <td>${it.code}</td>
+          <td>${it.descripcion || ''}</td>
+          <td>${it.Talla || ''}</td>
+          <td>${it.cantidad}</td>
+          <td>${money(pc)}</td>
+          <td>${money(pf)}</td>
+          <td>${money(sc)}</td>
+          <td>${money(sf)}</td>
+          <td><button type="button" class="link danger" data-i="${i}">Quitar</button></td>
+        `;
+        itemsTBody.appendChild(tr);
+      });
+
+      document.getElementById('t_pcat').textContent = money(totPCat);
+      document.getElementById('t_pfac').textContent = money(totPFac);
+      document.getElementById('t_scat').textContent = money(totSCat);
+      document.getElementById('t_sfac').textContent = money(totSFac);
+      refreshHidden();
+    }
+
+    function refreshHidden() {
+      const safeItems = items.map(it => ({
+        code: it.code, descripcion: it.descripcion, Talla: it.Talla, cantidad: it.cantidad,
+        precio_catalogo: it.precio_catalogo, precio_factura: it.precio_factura
+      }));
+      itemsHidden.value = JSON.stringify(safeItems);
+    }
+
+    /* 
+      CAMBIO: Función modificada para agregar ítem.
+      Ahora valida el código antes de agregarlo a la lista.
+    */
+    btnAdd.addEventListener('click', async () => {
+      const code = String(codeInput.value || '').trim();
+      if (!code) { 
+        showCodeError('El código no puede estar vacío');
+        codeInput.focus(); 
+        return; 
+      }
+
+      // Validar que el código existe
+      const isValid = await validateCode(code);
+      if (!isValid) {
+        codeInput.focus();
+        return;
+      }
+
+      if (!lastProduct || lastProduct.code !== code) await loadProductByCode(code);
+      const Talla = (matrizInput.value || lastProduct?.Talla || '').trim();
+      const cant  = Math.max(1, parseInt(cantInput.value || '1', 10));
+
+      items.push({
+        code,
+        descripcion: lastProduct?.descripcion || descInput.value || '',
+        Talla,
+        cantidad: cant,
+        precio_catalogo: lastProduct?.precio_catalogo ?? null,
+        precio_factura:  lastProduct?.precio_factura  ?? null
+      });
+
+      codeInput.value = '';
+      descInput.value = '';
+      matrizInput.value = '';
+      cantInput.value = '1';
+      lastProduct = null;
+      clearCodeError();
+      renderTable();
+      codeInput.focus();
+    });
+
+    itemsTBody.addEventListener('click', (e) => {
+      if (e.target.matches('button.link.danger')) {
+        const i = parseInt(e.target.dataset.i, 10);
+        items.splice(i, 1);
+        renderTable();
+      }
+    });
+
+    document.getElementById('orderForm').addEventListener('submit', () => refreshHidden());
+  </script>
+{% endblock %}

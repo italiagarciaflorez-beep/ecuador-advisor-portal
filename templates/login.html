@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Ingresar - Portal Asesora{% endblock %}
+{% block content %}
+  <h1>Ingresar</h1>
+  <p>Usa tu <strong>ID</strong> como usuario y contraseña (a menos que TI configure una contraseña distinta).</p>
+  <form method='post' class='card'>
+    <label>ID de DT</label>
+    <input type='text' name='user_id' placeholder='Ej: 97802' required>
+    <label>Contraseña</label>
+    <input type='password' name='password' required>
+    <button type='submit'>Entrar</button>
+  </form>
+{% endblock %}

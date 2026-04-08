@@ -1,0 +1,901 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard - Portal Asesora{% endblock %}
+
+{% block content %}
+  <h1>Hola, {{ user_name }} 👋</h1>
+
+  <div class="grid">
+    <!-- Pedidos -->
+    <section class="card">
+      <div class="card-header">
+        <h2>Mis últimos pedidos</h2>
+        <a class="btn" href="{{ url_for('new_order') }}">Nuevo pedido</a>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+          <tr>
+            <th>Pedido</th>
+            <th>Fecha</th>
+            <th>Campaña</th>
+            {% if session.get('role') in ('adm', 'admin') %}
+              <th>User ID</th>  <!-- ✅ Nueva columna solo para admin -->
+            {% endif %}
+            <th>Nombre asesora</th>
+            <th>Items</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+          
+        <!-- REEMPLAZAR <tbody> -->
+        <tbody>
+          {% for o in orders %}
+            <tr>
+              <td><a href="#" class="order-link" data-order-id="{{ o.order_id }}">{{ o.order_id }}</a></td>
+              <td>{{ o.fecha }}</td>
+              <td>{{ o.campaña }}</td>
+              {% if session.get('role') in ('adm', 'admin') %}
+                <td><strong>{{ o.user_id }}</strong></td>  <!-- ✅ Mostrar ID -->
+              {% endif %}
+              <td>{{ o["Nombre asesora"] }}</td>
+              <td>{{ o.total_items }}</td>
+              <td>
+                <button type="button" class="btn edit-btn" data-order-id="{{ o['order_id'] }}">Editar</button>
+                <form action="{{ url_for('delete_order', order_id=o['order_id']) }}" method="post" style="display:inline;">
+                  <button type="submit" class="btn danger" 
+                          onclick="return confirm('¿Estás seguro de eliminar este pedido?')">
+                    Borrar
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+          
+        </table>
+      </div>
+    </section>
+
+    <!-- Documentos opcionales -->
+    <section class="card">
+      <div class="card-header"><h2>Documentos</h2></div>
+      {% if docs and docs|length %}
+        <ul class="list">
+          {% for d in docs %}
+            <li><a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.nombre }}</a></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No hay documentos asociados.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- ===== Modal Detalle de Pedido (Lectura) ===== -->
+  <div id="orderModal" class="modal" hidden>
+    <div class="modal__backdrop" data-close></div>
+    <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
+      <div class="modal__header">
+        <h3 id="orderModalTitle">Pedido</h3>
+        <button class="icon-btn" title="Cerrar" data-close>&times;</button>
+      </div>
+
+      <div class="modal__body">
+        <div class="order-summary">
+          <div><b>Pedido:</b> <span id="m_order_id">–</span></div>
+          <div><b>Fecha:</b> <span id="m_fecha">–</span></div>
+          <div><b>Campaña:</b> <span id="m_campana">–</span></div>
+          <div><b>Estado:</b> <span id="m_estado">–</span></div>
+          <div><b>Nombre asesora:</b> <span id="m_advisor">–</span></div>
+          <div><b>Notas:</b> <span id="m_notes">–</span></div>
+          <div><b>Total items:</b> <span id="m_total_items">0</span></div>
+        </div>
+
+        <div class="table-wrap mt">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Código</th>
+                <th>Descripción</th>
+                <th>Talla</th>
+                <th>Cant.</th>
+                <th>Precio catálogo</th>
+                <th>Precio factura</th>
+                <th>Subt. catálogo</th>
+                <th>Subt. factura</th>
+              </tr>
+            </thead>
+            <tbody id="m_items"></tbody>
+            <tfoot>
+              <tr>
+                <td colspan="5" style="text-align:right"><b>Totales:</b></td>
+                <td id="m_t_pcat">–</td>
+                <td id="m_t_pfac">–</td>
+                <td id="m_t_scat">–</td>
+                <td id="m_t_sfac">–</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal__footer">
+        <button class="btn" data-close>Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal Editar Pedido ===== -->
+  <div id="editOrderModal" class="modal" hidden>
+    <div class="modal__backdrop" data-close-edit></div>
+    <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="editOrderModalTitle">
+      <div class="modal__header">
+        <h3 id="editOrderModalTitle">Editar Pedido</h3>
+        <button class="icon-btn" title="Cerrar" data-close-edit>&times;</button>
+      </div>
+
+      <div class="modal__body">
+        <form id="editOrderForm">
+          <div class="form-group">
+            <label for="edit_order_id"><b>Pedido</b></label>
+            <input type="text" id="edit_order_id" readonly style="background:#1f2937; color:#9ca3af;">
+          </div>
+
+          <div class="form-group">
+            <label for="edit_advisor_name"><b>Nombre asesora</b></label>
+            <input type="text" id="edit_advisor_name" readonly style="background:#1f2937; color:#9ca3af;">
+          </div>
+
+          <hr class="divider">
+
+          <h4>Ítems actuales</h4>
+          <div class="table-wrap">
+            <table class="table" id="editItemsTable">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Código</th>
+                  <th>Descripción</th>
+                  <th>Talla</th>
+                  <th>Cant.</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="editItemsBody"></tbody>
+            </table>
+          </div>
+
+          <hr class="divider">
+
+          <h4>Agregar/Editar Ítem</h4>
+          <div class="row">
+            <div class="grow">
+              <label for="edit_codigo">Código</label>
+              <input id="edit_codigo" list="editMatList" placeholder="Código o descripción">
+              <datalist id="editMatList"></datalist>
+              <!-- CAMBIO: Agregamos div para mostrar errores de validación en edición -->
+              <div id="editCodeErrorMsg" class="error-message" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></div>
+            </div>
+            <div class="grow">
+              <label for="edit_descripcion">Descripción</label>
+              <input id="edit_descripcion" placeholder="Se autocompleta" readonly>
+            </div>
+            <div>
+              <label for="edit_talla">Talla</label>
+              <input id="edit_talla" placeholder="Se autocompleta">
+            </div>
+            <div>
+              <label for="edit_cantidad">Cantidad</label>
+              <input id="edit_cantidad" type="number" min="1" value="1">
+            </div>
+            <div style="align-self:end">
+              <!-- CAMBIO: Agregamos atributo disabled mientras se valida -->
+              <button type="button" id="editBtnAdd" class="btn">Agregar</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal__footer">
+        <button type="button" id="editBtnSave" class="btn primary">Guardar cambios</button>
+        <button type="button" class="btn" data-close-edit>Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .mt { margin-top:12px; }
+    .modal[hidden] { display:none; }
+    .modal__backdrop { position:fixed; inset:0; background:rgba(0,0,0,.45); }
+    .modal__dialog { position:fixed; inset:0; margin:auto; max-width:900px; width:calc(100% - 24px); max-height:80vh; overflow:auto;
+                     background:#0b1324; border:1px solid #1f2937; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+    .modal__header, .modal__footer { padding:14px 16px; border-bottom:1px solid #1f2937; }
+    .modal__footer { border-top:1px solid #1f2937; border-bottom:none; text-align:right; }
+    .modal__body { padding:16px; }
+    .order-summary { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px 16px; }
+    .icon-btn { background:transparent; border:0; color:#e5e7eb; font-size:22px; cursor:pointer; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; margin-bottom: 4px; }
+    .form-group input { width: 100%; padding: 8px; background:#1f2937; border:1px solid #374151; color:#e5e7eb; border-radius:4px; }
+    .divider { border: none; border-top: 1px solid #1f2937; margin: 16px 0; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    .grow { flex:1; min-width:150px; }
+    .row > div { display: flex; flex-direction: column; }
+    .row label { margin-bottom: 4px; }
+    .row input { padding: 8px; background:#1f2937; border:1px solid #374151; color:#e5e7eb; border-radius:4px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .order-summary { grid-template-columns: 1fr 1fr; } }
+  </style>
+
+  <script>
+    const modal = document.getElementById('orderModal');
+    const editModal = document.getElementById('editOrderModal');
+    const tbody = document.getElementById('m_items');
+
+    function openModal(){ modal.hidden = false; }
+    function closeModal(){ modal.hidden = true; }
+    function openEditModal(){ editModal.hidden = false; }
+    function closeEditModal(){ editModal.hidden = true; }
+
+    modal.addEventListener('click', (e) => { if (e.target.hasAttribute('data-close')) closeModal(); });
+    editModal.addEventListener('click', (e) => { if (e.target.hasAttribute('data-close-edit')) closeEditModal(); });
+    window.addEventListener('keydown', (e) => { 
+      if (!modal.hidden && e.key === 'Escape') closeModal(); 
+      if (!editModal.hidden && e.key === 'Escape') closeEditModal();
+    });
+
+    function money(v) {
+      if (v === null || v === undefined || isNaN(v)) return '–';
+      return new Intl.NumberFormat('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(v);
+    }
+
+    async function withPrices(items) {
+      const lookups = items.map(it =>
+        fetch(`/api/product/${encodeURIComponent(it.Codigo)}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(_ => null)
+      );
+      const data = await Promise.all(lookups);
+      return items.map((it, idx) => {
+        const p = data[idx] || {};
+        const d = p?.data ?? p;
+        const pc = (d && !d.error) ? d.precio_catalogo : null;
+        const pf = (d && !d.error) ? d.precio_factura  : null;
+        return { ...it, precio_catalogo: pc, precio_factura: pf };
+      });
+    }
+
+    async function loadOrder(orderId) {
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`);
+      if (!res.ok) return;
+      const payload = await res.json();
+      if (!payload.ok) return;
+
+      const { header, items } = payload.data;
+
+      document.getElementById('m_order_id').textContent = header.order_id || '–';
+      document.getElementById('m_fecha').textContent    = header.fecha || '–';
+      document.getElementById('m_campana').textContent  = header.campaña || header.campana || '–';
+      document.getElementById('m_estado').textContent   = header.estado || '–';
+      document.getElementById('m_advisor').textContent =
+        header.nombre_asesora || header['Nombre asesora'] || header.notes || '–';
+      document.getElementById('m_notes').textContent = header.notes || '–';
+      document.getElementById('m_total_items').textContent = header.total_items || items.length;
+
+      const enriched = await withPrices(items);
+
+      tbody.innerHTML = '';
+      let tPC=0, tPF=0, tSC=0, tSF=0;
+      enriched.forEach((it, i) => {
+        const pc = it.precio_catalogo ?? null;
+        const pf = it.precio_factura  ?? null;
+        const sc = (pc != null ? pc * it.cantidad : null);
+        const sf = (pf != null ? pf * it.cantidad : null);
+
+        if (pc != null) tPC += pc;
+        if (pf != null) tPF += pf;
+        if (sc != null) tSC += sc;
+        if (sf != null) tSF += sf;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${i+1}</td>
+          <td>${it.Codigo}</td>
+          <td>${it.descripcion || ''}</td>
+          <td>${it.Talla || ''}</td>
+          <td>${it.cantidad}</td>
+          <td>${money(pc)}</td>
+          <td>${money(pf)}</td>
+          <td>${money(sc)}</td>
+          <td>${money(sf)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('m_t_pcat').textContent = money(tPC);
+      document.getElementById('m_t_pfac').textContent = money(tPF);
+      document.getElementById('m_t_scat').textContent = money(tSC);
+      document.getElementById('m_t_sfac').textContent = money(tSF);
+
+      openModal();
+    }
+
+    document.querySelectorAll('.order-link').forEach(a => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        const id = a.getAttribute('data-order-id');
+        if (id) loadOrder(id);
+      });
+    });
+
+    // ========== LÓGICA EDITAR PEDIDO (CON VALIDACIÓN) ==========
+    let editItems = [];
+    let editLastProduct = null;
+    let editOrderId = null;
+    let editIsValidatingCode = false; // CAMBIO: Flag para rastrear validación
+    let isSavingEdit = false;
+
+
+  
+
+    async function loadOrderForEdit(orderId) {
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`);
+      if (!res.ok) return;
+      const payload = await res.json();
+      if (!payload.ok) return;
+
+      const { header, items } = payload.data;
+      editOrderId = header.order_id;
+      editItems = items.map(it => ({
+        Codigo: it.Codigo || it.codigo || '',
+        descripcion: it.descripcion || '',
+        Talla: it.Talla || '',
+        cantidad: parseInt(it.cantidad, 10) || 1,
+        line: it.line || 0
+      }));
+
+      document.getElementById('edit_order_id').value = header.order_id || '';
+      document.getElementById('edit_advisor_name').value = 
+        header.nombre_asesora || header['Nombre asesora'] || header.notes || '';
+
+      document.getElementById('edit_codigo').value = '';
+      document.getElementById('edit_descripcion').value = '';
+      document.getElementById('edit_talla').value = '';
+      document.getElementById('edit_cantidad').value = '1';
+      editLastProduct = null;
+
+      renderEditTable();
+      openEditModal();
+    }
+
+    function renderEditTable() {
+      const tbody = document.getElementById('editItemsBody');
+      tbody.innerHTML = '';
+      editItems.forEach((it, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${i+1}</td>
+          <td>${it.Codigo}</td>
+          <td>${it.descripcion || ''}</td>
+          <td>${it.Talla || ''}</td>
+          <td><input type="number" min="1" value="${it.cantidad}" class="qty-input" data-i="${i}" style="width:60px; padding:4px;"></td>
+          <td><button type="button" class="link danger remove-btn" data-i="${i}">Quitar</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Event listeners para cambiar cantidad
+      document.querySelectorAll('.qty-input').forEach(inp => {
+        inp.addEventListener('change', (e) => {
+          const i = parseInt(e.target.dataset.i, 10);
+          editItems[i].cantidad = Math.max(1, parseInt(e.target.value, 10));
+        });
+      });
+
+      // Event listeners para quitar ítem
+      document.querySelectorAll('.remove-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const i = parseInt(e.target.dataset.i, 10);
+          editItems.splice(i, 1);
+          renderEditTable();
+        });
+      });
+    }
+
+    /* 
+      CAMBIO: Nueva función para validar código en la sección de edición.
+    */
+    async function validateEditCode(code) {
+      if (!code) {
+        showEditCodeError('El código no puede estar vacío');
+        return false;
+      }
+
+      editIsValidatingCode = true;
+      document.getElementById('editBtnAdd').disabled = true;
+      clearEditCodeError();
+
+      try {
+        const res = await fetch('/api/validate-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+
+        const result = await res.json();
+
+        if (!result.valid) {
+          showEditCodeError(result.error || 'Código no válido');
+          editIsValidatingCode = false;
+          document.getElementById('editBtnAdd').disabled = false;
+          return false;
+        }
+
+        clearEditCodeError();
+        editIsValidatingCode = false;
+        document.getElementById('editBtnAdd').disabled = false;
+        return true;
+
+      } catch (e) {
+        console.error('validateEditCode error', e);
+        showEditCodeError('Error al validar el código');
+        editIsValidatingCode = false;
+        document.getElementById('editBtnAdd').disabled = false;
+        return false;
+      }
+    }
+
+    /* 
+      CAMBIO: Funciones auxiliares para errores en la sección de edición.
+    */
+    function showEditCodeError(message) {
+      const errorMsg = document.getElementById('editCodeErrorMsg');
+      const input = document.getElementById('edit_codigo');
+      errorMsg.textContent = message;
+      errorMsg.style.display = 'block';
+      input.style.borderColor = '#ef4444';
+    }
+
+    function clearEditCodeError() {
+      const errorMsg = document.getElementById('editCodeErrorMsg');
+      const input = document.getElementById('edit_codigo');
+      errorMsg.textContent = '';
+      errorMsg.style.display = 'none';
+      input.style.borderColor = '';
+    }
+
+    async function searchEditProducts(q) {
+      if (!q || q.length < 2) { document.getElementById('editMatList').innerHTML = ''; return; }
+      try {
+        const res = await fetch(`/api/materials?q=${encodeURIComponent(q)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.data || []);
+        const matList = document.getElementById('editMatList');
+        matList.innerHTML = '';
+        (list || []).forEach(it => {
+          const opt = document.createElement('option');
+          opt.value = it.code;
+          opt.label = it.label;
+          matList.appendChild(opt);
+        });
+      } catch (e) { console.error('searchEditProducts error', e); }
+    }
+
+    async function loadEditProductByCode(code) {
+      const descInput = document.getElementById('edit_descripcion');
+      descInput.value = '';
+      if (!code) return;
+      try {
+        const res = await fetch(`/api/product/${encodeURIComponent(code)}`);
+        if (!res.ok) return;
+        const raw = await res.json();
+        const payload = raw?.data ?? raw;
+        if (payload && !payload.error) {
+          editLastProduct = {
+            code: code,
+            descripcion: payload.descripcion || '',
+            Talla: payload.Talla || ''
+          };
+          descInput.value = editLastProduct.descripcion || '';
+          const tallaInput = document.getElementById('edit_talla');
+          if (editLastProduct.Talla && !tallaInput.value) tallaInput.value = editLastProduct.Talla;
+        }
+      } catch (e) { console.error('loadEditProductByCode error', e); }
+    }
+
+    document.getElementById('edit_codigo').addEventListener('input', (e) => {
+      clearEditCodeError();
+      searchEditProducts(e.target.value);
+    });
+    
+    document.getElementById('edit_codigo').addEventListener('change', (e) => loadEditProductByCode(e.target.value));
+
+    /* 
+      CAMBIO: Botón agregar en edición ahora valida el código.
+    */
+    document.getElementById('editBtnAdd').addEventListener('click', async () => {
+      const code = String(document.getElementById('edit_codigo').value || '').trim();
+      if (!code) { 
+        showEditCodeError('El código no puede estar vacío');
+        document.getElementById('edit_codigo').focus(); 
+        return; 
+      }
+
+      // Validar que el código existe
+      const isValid = await validateEditCode(code);
+      if (!isValid) {
+        document.getElementById('edit_codigo').focus();
+        return;
+      }
+
+      if (!editLastProduct || editLastProduct.code !== code) await loadEditProductByCode(code);
+      
+      const Talla = (document.getElementById('edit_talla').value || editLastProduct?.Talla || '').trim();
+      const cant  = Math.max(1, parseInt(document.getElementById('edit_cantidad').value || '1', 10));
+
+      editItems.push({
+        Codigo: code,
+        descripcion: editLastProduct?.descripcion || document.getElementById('edit_descripcion').value || '',
+        Talla,
+        cantidad: cant,
+        line: editItems.length + 1
+      });
+
+      document.getElementById('edit_codigo').value = '';
+      document.getElementById('edit_descripcion').value = '';
+      document.getElementById('edit_talla').value = '';
+      document.getElementById('edit_cantidad').value = '1';
+      editLastProduct = null;
+      clearEditCodeError();
+      renderEditTable();
+      document.getElementById('edit_codigo').focus();
+    });
+
+    document.getElementById('editBtnSave').addEventListener('click', async () => {
+      // ✅ 1. Evita doble click
+      if (isSavingEdit) return;
+
+      // ✅ 2. Validación básica
+      if (!editOrderId || !editItems || editItems.length === 0) {
+        alert('El pedido debe tener al menos un ítem.');
+        return;
+      }
+
+      // ✅ 3. Activar estado cargando
+      isSavingEdit = true;
+
+      const btn = document.getElementById('editBtnSave');
+      btn.disabled = true;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '⏳ Guardando...';
+
+      try {
+        const res = await fetch(`/api/update-order/${encodeURIComponent(editOrderId)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: editItems })
+        });
+
+        const result = await res.json();
+
+        if (result.ok) {
+          alert('Pedido actualizado correctamente.');
+          closeEditModal();
+          await loadOrder(editOrderId);
+          location.reload();
+        } else {
+          alert('Error: ' + (result.error || 'No se pudo actualizar el pedido'));
+        }
+
+      } catch (e) {
+        console.error('Error al guardar:', e);
+        alert('Error al guardar los cambios.');
+      } finally {
+        // ✅ 4. Restaurar botón SIEMPRE
+        isSavingEdit = false;
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    });
+
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const orderId = btn.getAttribute('data-order-id');
+        if (orderId) loadOrderForEdit(orderId);
+      });
+    });
+  </script>
+
+</script>
+
+<!-- ========== MODAL DE CONFIRMACIÓN DE PEDIDO ========== -->
+  {% if session.get('last_order') %}
+  <div id="orderSuccessModal" class="modal-overlay-success">
+    <div class="modal-content-success">
+      <!-- CABECERA -->
+      <div class="modal-header-success">
+        <span class="modal-icon-success">✅</span>
+        <h2>¡Pedido Creado Exitosamente!</h2>
+      </div>
+      
+      <!-- CUERPO -->
+      <div class="modal-body-success">
+        <div class="order-detail-success">
+          <span class="label-success">Número de Pedido:</span>
+          <span class="value-success order-id-success">{{ session['last_order']['order_id'] }}</span>
+        </div>
+        
+        <div class="order-detail-success">
+          <span class="label-success">Campaña:</span>
+          <span class="value-success">{{ session['last_order']['campaign'] }}</span>
+        </div>
+        
+        <div class="order-detail-success">
+          <span class="label-success">Asesora:</span>
+          <span class="value-success">{{ session['last_order']['advisor_name'] }}</span>
+        </div>
+        
+        <div class="order-summary-success">
+          <div class="summary-item-success">
+            <span class="summary-number-success">{{ session['last_order']['total_productos'] }}</span>
+            <span class="summary-label-success">Productos</span>
+          </div>
+          <div class="summary-item-success">
+            <span class="summary-number-success">{{ session['last_order']['total_items'] }}</span>
+            <span class="summary-label-success">Unidades Totales</span>
+          </div>
+        </div>
+        
+        <!-- ✅ NUEVO: Tabla de detalle de productos -->
+        {% if session['last_order'].get('items') %}
+        <div class="order-items-detail">
+          <h4 style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.75rem; font-weight: 600;">Detalle de Productos:</h4>
+          <div class="items-table-wrapper">
+            <table class="items-table-success">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Descripción</th>
+                  <th>Talla</th>
+                  <th>Cantidad</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in session['last_order']['items'] %}
+                <tr>
+                  <td><span class="item-code">{{ item.code }}</span></td>
+                  <td class="item-desc">{{ item.descripcion }}</td>
+                  <td>{{ item.Talla }}</td>
+                  <td><span class="item-qty">{{ item.cantidad }}</span></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      </div>
+      
+      <!-- PIE -->
+      <div class="modal-footer-success">
+        <button onclick="closeSuccessModal()" class="btn-success primary">Entendido</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .modal-overlay-success {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+
+    .modal-content-success {
+      background: #1e293b;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      max-width: 900px;          /* más ancho para la tabla */
+      width: 92%;
+      max-height: 85vh;          /* 🔑 evita que ocupe toda la pantalla */
+      display: flex;             /* 🔑 permite separar header/body/footer */
+      flex-direction: column;
+      animation: slideUp 0.3s ease;
+      border: 1px solid #334155;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .modal-header-success {
+      padding: 2rem;
+      text-align: center;
+      border-bottom: 1px solid #334155;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border-radius: 16px 16px 0 0;
+    }
+
+    .modal-icon-success {
+      font-size: 4rem;
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+
+    .modal-header-success h2 {
+      color: white;
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .modal-body-success {
+      padding: 2rem;
+      overflow-y: auto;     /* 🔑 aparece la barrita */
+      overflow-x: hidden;
+      flex: 1 1 auto;  
+      
+    }
+
+    .order-detail-success {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #334155;
+    }
+
+    .order-detail-success:last-of-type {
+      border-bottom: none;
+      margin-bottom: 1.5rem;
+    }
+
+    .label-success {
+      color: #94a3b8;
+      font-size: 0.95rem;
+    }
+
+    .value-success {
+      color: white;
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .order-id-success {
+      color: #60a5fa;
+      font-family: 'Courier New', monospace;
+      font-size: 1.1rem;
+    }
+
+    .order-summary-success {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.5rem;
+      padding: 1.5rem;
+      background: #0f172a;
+      border-radius: 12px;
+      border: 1px solid #334155;
+    }
+
+    .summary-item-success {
+      text-align: center;
+    }
+
+    .summary-number-success {
+      display: block;
+      font-size: 2rem;
+      font-weight: 700;
+      color: #60a5fa;
+      margin-bottom: 0.25rem;
+    }
+
+    .summary-label-success {
+      display: block;
+      font-size: 0.875rem;
+      color: #94a3b8;
+    }
+
+    .modal-footer-success {
+      padding: 1.5rem 2rem;
+      border-top: 1px solid #334155;
+    }
+
+    .btn-success {
+      width: 100%;
+      padding: 0.875rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      border: none;
+      background: #3b82f6;
+      color: white;
+      font-size: 1rem;
+    }
+
+    .btn-success:hover {
+      background: #2563eb;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+    .items-table-wrapper {
+    max-height: 300px;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    }
+    .btn[disabled] { opacity: .6; cursor: not-allowed; }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.35);
+      border-top-color: rgba(255,255,255,1);
+      border-radius: 999px;
+      display: inline-block;
+      animation: spin .8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+
+  </style>
+
+  <script>
+    function closeSuccessModal() {
+      const modal = document.getElementById('orderSuccessModal');
+      modal.style.animation = 'fadeOut 0.3s ease';
+      setTimeout(() => {
+        modal.remove();
+      }, 300);
+      
+      // Limpiar sesión
+      fetch('/api/clear-last-order', { 
+        method: 'POST',
+        keepalive: true
+      }).catch(() => {});
+    }
+
+    // Cerrar con Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.getElementById('orderSuccessModal')) {
+        closeSuccessModal();
+      }
+    });
+
+    // Cerrar al hacer click fuera
+    const successModal = document.getElementById('orderSuccessModal');
+    if (successModal) {
+      successModal.addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal-overlay-success')) {
+          closeSuccessModal();
+        }
+      });
+    }
+  </script>
+  {% endif %}
+
+{% endblock %}

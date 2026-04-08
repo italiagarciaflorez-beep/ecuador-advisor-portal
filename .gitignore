@@ -1,0 +1,9 @@
+.env
+creds.json
+*.json
+.venv/
+__pycache__/
+*.pyc
+logs/
+test_b64.py
+test_env.py

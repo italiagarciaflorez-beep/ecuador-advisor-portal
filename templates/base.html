@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Portal Asesoras{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">ELEDÉ ECUADOR</div>
+
+    {% if session.get('user_id') %}
+      <div class="user">
+        👤 {{ session.get('user_name', session.get('user_id')) }}
+        
+        <!-- ✅ Badge de admin -->
+        {% if session.get('role') in ('adm', 'admin') %}
+          <span class="admin-badge">⚡ Admin</span>
+        {% endif %}
+      </div>
+
+      <nav class="menu">
+        <a href="{{ url_for('dashboard') }}">🏠 Inicio</a>
+        <a href="{{ url_for('new_order') }}">🧾 Nuevo pedido</a>
+        
+        <!-- ✅ Enlace al panel de admin (si existe) -->
+        {% if session.get('role') in ('adm', 'admin') %}
+          <a href="{{ url_for('admin_panel') }}">⚙️ Panel Admin</a>
+        {% endif %}
+        
+        <a href="{{ url_for('logout') }}">🚪 Cerrar sesión</a>
+      </nav>
+    {% endif %}
+
+  
+  </aside>
+
+  <main class="content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for cat, msg in messages %}
+          <div class="flash {{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<!-- 🆕 Cierre de sesión automático al cerrar pestaña/ventana o salir del sitio -->
+<script>
+(function(){
+  let internalNav = false;
+
+  // Marca navegación interna (click en enlaces propios o envío de formularios)
+  document.addEventListener('click', function(e){
+    const a = e.target.closest('a');
+    if (!a) return;
+    const href = a.getAttribute('href') || '';
+    try {
+      const url = new URL(href, window.location.origin);
+      if (url.origin === window.location.origin && url.pathname.startsWith('/')) {
+        internalNav = true;
+        setTimeout(function(){ internalNav = false; }, 1500);
+      }
+    } catch(_) {}
+  }, true);
+
+  document.addEventListener('submit', function(){
+    internalNav = true;
+    setTimeout(function(){ internalNav = false; }, 1500);
+  }, true);
+
+  // Cuando el usuario cierra la pestaña/ventana o navega fuera del sitio, cerramos sesión
+  window.addEventListener('beforeunload', function(){
+    if (!internalNav && navigator.sendBeacon) {
+      try { navigator.sendBeacon('/logout-beacon'); } catch(e) {}
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

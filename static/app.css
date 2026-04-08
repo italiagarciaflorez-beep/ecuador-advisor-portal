@@ -1,0 +1,226 @@
+* {
+    box-sizing: border-box
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial, sans-serif;
+    background: #0b1220;
+    color: #e5e9f0
+}
+
+a {
+    color: #8ab4ff;
+    text-decoration: none
+}
+
+.btn {
+    display: inline-block;
+    padding: .5rem .8rem;
+    border: 1px solid #3b4252;
+    border-radius: .5rem
+}
+
+.btn.primary {
+    background: #4c8bf5;
+    color: white;
+    border-color: #4c8bf5
+}
+
+.link {
+    background: transparent;
+    border: none;
+    color: #8ab4ff;
+    cursor: pointer
+}
+
+.danger {
+    color: #ff7b7b
+}
+
+.layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 100vh
+}
+
+.sidebar {
+    background: #0f172a;
+    border-right: 1px solid #1f2937;
+    padding: 1rem;
+    position: sticky;
+    top: 0;
+    height: 100vh
+}
+
+.brand {
+    font-weight: 700;
+    font-size: 1.4rem;
+    margin-bottom: 1rem
+}
+
+.user {
+    margin: .5rem 0 1rem;
+    opacity: .8
+}
+
+.sidebar nav a {
+    display: block;
+    padding: .4rem .2rem;
+    border-radius: .4rem;
+    margin-bottom: .2rem
+}
+
+.sidebar nav a:hover {
+    background: #111827
+}
+
+.content {
+    padding: 1rem 2rem
+}
+
+h1 {
+    margin-top: 0
+}
+
+.card {
+    background: #111827;
+    border: 1px solid #1f2937;
+    border-radius: 1rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .25)
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: .5rem
+}
+
+label {
+    display: block;
+    font-size: .9rem;
+    margin-top: .6rem;
+    margin-bottom: .2rem;
+    opacity: .8
+}
+
+
+/* ⬇️ ÚNICO AJUSTE RELEVANTE: incluir select y quitar estilo nativo */
+
+input,
+select {
+    width: 100%;
+    padding: .55rem;
+    border: 1px solid #374151;
+    border-radius: .6rem;
+    background: #0b1220;
+    color: #e5e9f0;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: .5rem
+}
+
+th,
+td {
+    padding: .5rem;
+    border-bottom: 1px solid #1f2937;
+    text-align: left
+}
+
+th {
+    opacity: .8
+}
+
+.flash {
+    padding: .6rem .9rem;
+    border-radius: .6rem;
+    margin-bottom: .7rem
+}
+
+.flash.ok {
+    background: #12321d;
+    border: 1px solid #1e7e34
+}
+
+.flash.error {
+    background: #401515;
+    border: 1px solid #9b2226
+}
+
+.grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 2fr 1fr
+}
+
+.list {
+    list-style: none;
+    padding-left: 1rem
+}
+
+.row {
+    display: flex;
+    gap: .7rem;
+    align-items: flex-end
+}
+
+.row .grow {
+    flex: 1
+}
+
+.actions {
+    margin-top: .8rem;
+    display: flex;
+    gap: .6rem
+}
+
+@media (max-width:900px) {
+    .layout {
+        grid-template-columns: 1fr
+    }
+    .grid {
+        grid-template-columns: 1fr
+    }
+    .sidebar {
+        height: auto
+    }
+}
+
+
+/* Badge de administrador */
+
+.admin-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 12px;
+    margin-left: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+
+/* Botón de borrar con estilo danger */
+
+.btn.danger {
+    background: #ef4444;
+    color: white;
+    border-color: #dc2626;
+}
+
+.btn.danger:hover {
+    background: #dc2626;
+}

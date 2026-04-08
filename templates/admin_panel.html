@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+{% block title %}Panel de Administración{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+  <h1>⚙️ Panel de Administración</h1>
+  <p>Vista general del sistema</p>
+</div>
+
+<div class="stats-grid">
+  <!-- Total de pedidos -->
+  <div class="stat-card">
+    <div class="stat-icon">📦</div>
+    <div class="stat-value">{{ total_orders }}</div>
+    <div class="stat-label">Total Pedidos</div>
+  </div>
+  
+  <!-- Total de campañas -->
+  <div class="stat-card">
+    <div class="stat-icon">📅</div>
+    <div class="stat-value">{{ campaigns|length }}</div>
+    <div class="stat-label">Campañas Activas</div>
+  </div>
+  
+  <!-- Total de asesoras -->
+  <div class="stat-card">
+    <div class="stat-icon">👥</div>
+    <div class="stat-value">{{ total_advisors }}</div>
+    <div class="stat-label">Asesoras Activas</div>
+  </div>
+</div>
+
+<div class="admin-grid">
+  <!-- Pedidos por campaña -->
+  <section class="card">
+    <h2>📊 Pedidos por Campaña</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Campaña</th>
+            <th>Pedidos</th>
+            <th>Total Items</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for camp, data in campaigns.items() %}
+            <tr>
+              <td><strong>{{ camp }}</strong></td>
+              <td>{{ data.count }}</td>
+              <td>{{ data.total_items }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Top asesoras -->
+  <section class="card">
+    <h2>🏆 Top 10 Asesoras</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+            <tr>
+            <th>#</th>
+            <th>Nombre Asesora</th>  <!-- ✅ Más claro -->
+            <th>Pedidos</th>
+            <th>Total Items</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for advisor_key, data in top_advisors %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ data.name }}</td>
+                <td>{{ data.count }}</td>
+                <td>{{ data.total_items }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        </table>
+    </div>
+  </section>
+</div>
+
+<style>
+  .admin-header {
+    margin-bottom: 2rem;
+  }
+  
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  
+  .stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 1.5rem;
+    border-radius: 1rem;
+    text-align: center;
+    color: white;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  }
+  
+  .stat-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+  
+  .stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+  }
+  
+  .admin-grid {
+    display: grid;
+    gap: 1rem;
+  }
+</style>
+
+<div class="admin-header">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <h1>⚙️ Panel de Administración</h1>
+      <p>Vista general del sistema</p>
+    </div>
+    <a href="{{ url_for('export_orders') }}" class="btn primary" download>
+      📥 Exportar CSV
+    </a>
+  </div>
+</div>
+{% endblock %}
